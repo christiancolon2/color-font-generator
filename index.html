@@ -1,0 +1,2224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Aesthetic Generator</title>
+    <meta
+      name="description"
+      content="Generate aesthetic color palettes + font pairings with live preview, locking, exports, and favorites. Single-file vanilla JS."
+    />
+
+    <!-- App chrome fonts (Option B) -->
+    <!-- Optional online font loading; app works offline with graceful fallbacks -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        /* App chrome (neutral, fixed palette) */
+        --app-bg: #f8fafc;
+        --app-surface: #ffffff;
+        --app-border: #e2e8f0;
+        --app-text: #0f172a;
+        --app-text2: #475569;
+        --app-accent: #2563eb;
+
+        /* App spacing + radii */
+        --r-card: 12px;
+        --r-ctl: 10px;
+        --s-1: 8px;
+        --s-2: 16px;
+        --s-3: 24px;
+        --s-4: 32px;
+
+        --shadow:
+          0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 20px rgba(15, 23, 42, 0.06);
+        --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.05);
+
+        /* Typography for app chrome */
+        --ui-h:
+          "Space Grotesk", ui-sans-serif, system-ui, -apple-system, Segoe UI,
+          Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        --ui-b:
+          "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--app-bg);
+        color: var(--app-text);
+        font-family: var(--ui-b);
+        line-height: 1.5;
+      }
+
+      /* Accessibility */
+      :focus-visible {
+        outline: 3px solid color-mix(in oklab, var(--app-accent) 55%, white);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
+      .app {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--s-3);
+      }
+
+      .topbar {
+        display: flex;
+        gap: var(--s-2);
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: var(--s-3);
+      }
+      .brand {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .brand h1 {
+        font-family: var(--ui-h);
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+        font-size: 24px;
+        margin: 0;
+      }
+      .brand p {
+        margin: 0;
+        color: var(--app-text2);
+        font-size: 13px;
+        max-width: 720px;
+      }
+      .seedbar {
+        display: flex;
+        gap: var(--s-1);
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        color: var(--app-text2);
+        font-size: 13px;
+        margin-top: 2px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid var(--app-border);
+        background: var(--app-surface);
+        border-radius: 999px;
+        box-shadow: var(--shadow-soft);
+      }
+      .mono {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: var(--s-3);
+        align-items: start;
+      }
+
+      @media (max-width: 980px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .seedbar {
+          justify-content: flex-start;
+        }
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+
+      .card {
+        background: var(--app-surface);
+        border: 1px solid var(--app-border);
+        border-radius: var(--r-card);
+        box-shadow: var(--shadow-soft);
+      }
+      .card .hd {
+        padding: var(--s-2);
+        border-bottom: 1px solid var(--app-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--s-2);
+      }
+      .card .hd h2 {
+        margin: 0;
+        font-family: var(--ui-h);
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+      .card .bd {
+        padding: var(--s-2);
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-2);
+      }
+
+      .row {
+        display: flex;
+        gap: var(--s-1);
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .btn {
+        appearance: none;
+        border: 1px solid var(--app-border);
+        background: var(--app-surface);
+        color: var(--app-text);
+        border-radius: var(--r-ctl);
+        padding: 10px 12px;
+        font: 600 13px/1 var(--ui-b);
+        cursor: pointer;
+        transition:
+          transform 0.06s ease,
+          background 0.12s ease,
+          border-color 0.12s ease,
+          box-shadow 0.12s ease;
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 38px;
+        user-select: none;
+      }
+      .btn:hover {
+        background: color-mix(in oklab, var(--app-surface) 85%, #f1f5f9);
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn.primary {
+        background: var(--app-accent);
+        border-color: color-mix(in oklab, var(--app-accent) 75%, #0b1b46);
+        color: white;
+        box-shadow:
+          0 8px 20px rgba(37, 99, 235, 0.18),
+          0 1px 0 rgba(15, 23, 42, 0.06);
+      }
+      .btn.primary:hover {
+        background: color-mix(in oklab, var(--app-accent) 88%, #1d4ed8);
+      }
+      .btn.danger {
+        color: #b91c1c;
+        border-color: color-mix(in oklab, #ef4444 35%, var(--app-border));
+      }
+      .btn.ghost {
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .btn.small {
+        padding: 8px 10px;
+        min-height: 32px;
+        font-weight: 600;
+        font-size: 12px;
+        border-radius: 9px;
+      }
+
+      .btn.icon {
+        padding: 8px 10px;
+        min-width: 38px;
+      }
+
+      .help {
+        margin-top: 6px;
+        color: var(--app-text2);
+        font-size: 12px;
+      }
+
+      .grid2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--s-1);
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      label {
+        font-size: 12px;
+        color: var(--app-text2);
+        font-weight: 600;
+      }
+      .input,
+      select {
+        width: 100%;
+        border: 1px solid var(--app-border);
+        border-radius: var(--r-ctl);
+        padding: 10px 12px;
+        font: 500 13px/1.2 var(--ui-b);
+        color: var(--app-text);
+        background: var(--app-surface);
+        transition:
+          border-color 0.12s ease,
+          box-shadow 0.12s ease;
+        min-height: 38px;
+      }
+      .input:focus,
+      select:focus {
+        outline: none;
+        border-color: color-mix(
+          in oklab,
+          var(--app-accent) 55%,
+          var(--app-border)
+        );
+        box-shadow: 0 0 0 4px
+          color-mix(in oklab, var(--app-accent) 18%, transparent);
+      }
+
+      .roles {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .role {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--s-1);
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--app-border);
+        border-radius: 12px;
+        background: #fff;
+      }
+      .role-left {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+      }
+      .swatch {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+        flex: 0 0 auto;
+      }
+      .role-meta {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .role-name {
+        font-family: var(--ui-h);
+        font-size: 13px;
+        margin: 0;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        text-transform: capitalize;
+      }
+      .role-hex {
+        font-size: 12px;
+        color: var(--app-text2);
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .role-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--app-border);
+        border-radius: var(--r-ctl);
+        padding: 8px 10px;
+        background: #fff;
+        cursor: pointer;
+        user-select: none;
+        font: 600 12px/1 var(--ui-b);
+        color: var(--app-text);
+        transition:
+          background 0.12s ease,
+          border-color 0.12s ease;
+      }
+      .toggle:hover {
+        background: color-mix(in oklab, #fff 86%, #f1f5f9);
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.22);
+        background: #fff;
+        box-shadow: inset 0 0 0 2px #fff;
+      }
+      .toggle[aria-pressed="true"] .dot {
+        background: var(--app-accent);
+        border-color: color-mix(in oklab, var(--app-accent) 70%, #0b1b46);
+      }
+
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--app-border);
+        background: #fff;
+        font-size: 12px;
+        color: var(--app-text2);
+      }
+      .badge strong {
+        color: var(--app-text);
+        font-weight: 700;
+      }
+      .badge.ok {
+        border-color: color-mix(in oklab, #22c55e 35%, var(--app-border));
+      }
+      .badge.warn {
+        border-color: color-mix(in oklab, #f59e0b 40%, var(--app-border));
+      }
+      .badge.fail {
+        border-color: color-mix(in oklab, #ef4444 40%, var(--app-border));
+      }
+
+      .fav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .fav {
+        border: 1px solid var(--app-border);
+        background: #fff;
+        border-radius: 12px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .fav-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .fav-title {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .fav-title strong {
+        font-family: var(--ui-h);
+        font-size: 13px;
+        letter-spacing: -0.01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fav-title span {
+        color: var(--app-text2);
+        font-size: 12px;
+      }
+      .fav-swatches {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .mini {
+        width: 14px;
+        height: 14px;
+        border-radius: 5px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+      }
+
+      /* Preview kit scoped variables */
+      .previewWrap {
+        position: sticky;
+        top: var(--s-3);
+      }
+      @media (max-width: 980px) {
+        .previewWrap {
+          position: static;
+          top: auto;
+        }
+      }
+
+      .preview {
+        border-radius: var(--r-card);
+        overflow: hidden;
+        border: 1px solid var(--app-border);
+        background: var(--app-surface);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .preview .frame {
+        /* Generated palette variables */
+        --p-bg: #ffffff;
+        --p-surface: #ffffff;
+        --p-primary: #111827;
+        --p-secondary: #475569;
+        --p-accent: #2563eb;
+        --p-text: #0f172a;
+        --p-muted: #64748b;
+
+        /* Generated fonts for preview only */
+        --p-h:
+          ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial;
+        --p-b:
+          ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial;
+
+        background: var(--p-bg);
+        color: var(--p-text);
+        padding: var(--s-4);
+        display: flex;
+        flex-direction: column;
+        gap: var(--s-3);
+        min-height: 540px;
+      }
+
+      @media (max-width: 560px) {
+        .preview .frame {
+          padding: var(--s-3);
+        }
+      }
+
+      .kit-hero h3 {
+        margin: 0 0 10px 0;
+        font-family: var(--p-h);
+        font-size: 34px;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+      }
+      .kit-hero p {
+        margin: 0;
+        font-family: var(--p-b);
+        color: color-mix(in oklab, var(--p-text) 78%, var(--p-muted));
+        max-width: 52ch;
+        font-size: 14px;
+      }
+      .kit-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 14px;
+      }
+      .kit-btn {
+        border-radius: 12px;
+        border: 1px solid transparent;
+        padding: 10px 14px;
+        font: 700 13px/1 var(--p-b);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition:
+          transform 0.06s ease,
+          filter 0.12s ease,
+          box-shadow 0.12s ease;
+        user-select: none;
+      }
+      .kit-btn:active {
+        transform: translateY(1px);
+      }
+      .kit-btn.primary {
+        background: var(--p-accent);
+        color: var(--p-bg);
+        box-shadow: 0 10px 24px
+          color-mix(in oklab, var(--p-accent) 22%, transparent);
+      }
+      .kit-btn.secondary {
+        background: transparent;
+        color: var(--p-text);
+        border-color: color-mix(in oklab, var(--p-text) 20%, transparent);
+      }
+      .kit-link {
+        font-family: var(--p-b);
+        font-size: 13px;
+        color: var(--p-accent);
+        text-decoration: none;
+        border-bottom: 1px solid
+          color-mix(in oklab, var(--p-accent) 45%, transparent);
+        padding-bottom: 2px;
+      }
+      .kit-link:hover {
+        filter: brightness(0.95);
+      }
+
+      .kit-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: var(--s-3);
+        align-items: start;
+      }
+      @media (max-width: 860px) {
+        .kit-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .kit-card {
+        background: var(--p-surface);
+        border: 1px solid color-mix(in oklab, var(--p-text) 12%, transparent);
+        border-radius: 16px;
+        padding: var(--s-3);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .kit-card h4 {
+        margin: 0;
+        font-family: var(--p-h);
+        letter-spacing: -0.02em;
+        font-size: 16px;
+      }
+      .kit-card p {
+        margin: 0;
+        font-family: var(--p-b);
+        color: color-mix(in oklab, var(--p-text) 78%, var(--p-muted));
+        font-size: 13px;
+      }
+
+      .kit-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in oklab, var(--p-accent) 35%, transparent);
+        color: color-mix(in oklab, var(--p-text) 80%, var(--p-muted));
+        font: 700 12px/1 var(--p-b);
+        width: fit-content;
+        background: color-mix(in oklab, var(--p-accent) 10%, transparent);
+      }
+
+      .kit-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .kit-label {
+        font: 700 12px/1 var(--p-b);
+        color: color-mix(in oklab, var(--p-text) 72%, var(--p-muted));
+      }
+      .kit-input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid color-mix(in oklab, var(--p-text) 18%, transparent);
+        background: color-mix(in oklab, var(--p-bg) 88%, var(--p-surface));
+        color: var(--p-text);
+        font: 600 13px/1.2 var(--p-b);
+        outline: none;
+      }
+      .kit-input:focus {
+        border-color: color-mix(in oklab, var(--p-accent) 55%, transparent);
+        box-shadow: 0 0 0 4px
+          color-mix(in oklab, var(--p-accent) 22%, transparent);
+      }
+
+      /* Toast */
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--app-border);
+        background: rgba(255, 255, 255, 0.92);
+        color: var(--app-text);
+        box-shadow: var(--shadow);
+        font: 600 13px/1.2 var(--ui-b);
+        display: none;
+        max-width: min(720px, calc(100vw - 24px));
+        backdrop-filter: blur(10px);
+        z-index: 50;
+      }
+      .toast.show {
+        display: block;
+      }
+      .toast .sub {
+        display: block;
+        margin-top: 2px;
+        color: var(--app-text2);
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      /* Small utility */
+      .muted {
+        color: var(--app-text2);
+      }
+      .sep {
+        height: 1px;
+        background: var(--app-border);
+        margin: 6px 0;
+      }
+      .nowrap {
+        white-space: nowrap;
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="app" id="app">
+      <header class="topbar">
+        <div class="brand">
+          <h1>Aesthetic Generator</h1>
+          <p>
+            Generate sensible color palettes and font pairings. Lock what you
+            like, export clean CSS, save favorites, and share results with a
+            seed URL.
+          </p>
+        </div>
+
+        <div class="seedbar" aria-label="Seed controls">
+          <span class="pill">
+            <span class="muted">Seed</span>
+            <span class="mono" id="seedText">—</span>
+            <button
+              class="btn small ghost"
+              id="btnCopySeed"
+              type="button"
+              aria-label="Copy seed"
+            >
+              Copy
+            </button>
+          </span>
+          <button
+            class="btn small"
+            id="btnCopyShare"
+            type="button"
+            aria-label="Copy share URL"
+          >
+            Copy Share URL
+          </button>
+          <button
+            class="btn small"
+            id="btnNewSeed"
+            type="button"
+            aria-label="Generate new seed"
+          >
+            New Seed
+          </button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <!-- LEFT: Controls -->
+        <section class="stack">
+          <div class="card">
+            <div class="hd">
+              <h2>Generate</h2>
+              <div class="row" style="gap: 8px">
+                <button
+                  class="btn small primary"
+                  id="btnRegenAll"
+                  type="button"
+                >
+                  Regenerate All
+                </button>
+                <button
+                  class="btn small"
+                  id="btnRegenUnlocked"
+                  type="button"
+                  title="Regenerate only unlocked items"
+                >
+                  Regenerate Unlocked
+                </button>
+              </div>
+            </div>
+            <div class="bd stack">
+              <div class="grid2">
+                <div class="field">
+                  <label for="seedInput">Seed (reproducible)</label>
+                  <input
+                    class="input mono"
+                    id="seedInput"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <div class="help">
+                    Enter a number to reproduce the same combo (respects locks).
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="favName">Favorite name (optional)</label>
+                  <input
+                    class="input"
+                    id="favName"
+                    placeholder="e.g., Midnight SaaS"
+                    autocomplete="off"
+                  />
+                  <div class="help">Used when saving a favorite.</div>
+                </div>
+              </div>
+
+              <div class="row">
+                <button class="btn primary" id="btnSaveFav" type="button">
+                  Save Favorite
+                </button>
+                <button
+                  class="btn"
+                  id="btnResetLocks"
+                  type="button"
+                  title="Unlock everything"
+                >
+                  Reset Locks
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <h2>Palette</h2>
+              <span class="muted" style="font-size: 12px"
+                >Roles + locks + copy</span
+              >
+            </div>
+            <div class="bd">
+              <div class="roles" id="roles"></div>
+              <div class="sep"></div>
+              <div class="row" style="gap: 8px; flex-wrap: wrap">
+                <button class="btn small" id="btnCopyAll" type="button">
+                  Copy All Colors
+                </button>
+                <button class="btn small" id="btnCopyVars" type="button">
+                  Copy CSS Variables
+                </button>
+              </div>
+              <div class="help">
+                Tip: lock individual roles to keep them while regenerating.
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <h2>Fonts (Preview)</h2>
+              <span class="muted" style="font-size: 12px"
+                >Pairing + locks + copy</span
+              >
+            </div>
+            <div class="bd stack">
+              <div class="role" style="grid-template-columns: 1fr">
+                <div
+                  class="row"
+                  style="
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 12px;
+                  "
+                >
+                  <div style="min-width: 0">
+                    <p class="role-name" style="margin: 0">Heading Font</p>
+                    <p
+                      class="role-hex mono"
+                      id="headingFontText"
+                      style="margin: 2px 0 0 0"
+                    >
+                      —
+                    </p>
+                  </div>
+                  <div class="role-actions">
+                    <button
+                      class="toggle"
+                      id="lockHeadingFont"
+                      type="button"
+                      aria-pressed="false"
+                      aria-label="Lock heading font"
+                    >
+                      <span class="dot" aria-hidden="true"></span> Lock
+                    </button>
+                    <button
+                      class="btn small"
+                      id="btnCopyHeadingFont"
+                      type="button"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="role" style="grid-template-columns: 1fr">
+                <div
+                  class="row"
+                  style="
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    gap: 12px;
+                  "
+                >
+                  <div style="min-width: 0">
+                    <p class="role-name" style="margin: 0">Body Font</p>
+                    <p
+                      class="role-hex mono"
+                      id="bodyFontText"
+                      style="margin: 2px 0 0 0"
+                    >
+                      —
+                    </p>
+                  </div>
+                  <div class="role-actions">
+                    <button
+                      class="toggle"
+                      id="lockBodyFont"
+                      type="button"
+                      aria-pressed="false"
+                      aria-label="Lock body font"
+                    >
+                      <span class="dot" aria-hidden="true"></span> Lock
+                    </button>
+                    <button
+                      class="btn small"
+                      id="btnCopyBodyFont"
+                      type="button"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row" style="gap: 8px; flex-wrap: wrap">
+                <button class="btn small" id="btnCopyFontCSS" type="button">
+                  Copy Font CSS
+                </button>
+                <button
+                  class="btn small"
+                  id="btnLoadFontsHint"
+                  type="button"
+                  title="Opens a small hint for optional font loading"
+                >
+                  Font Loading
+                </button>
+              </div>
+              <div class="help">
+                Generated fonts apply only inside the preview area. App chrome
+                stays neutral.
+              </div>
+
+              <details
+                class="card"
+                style="border-radius: 12px; box-shadow: none"
+              >
+                <summary
+                  class="bd"
+                  style="
+                    cursor: pointer;
+                    user-select: none;
+                    font: 700 13px/1 var(--ui-b);
+                  "
+                >
+                  Optional: add preview font links (manual)
+                  <span class="muted" style="font-weight: 600; font-size: 12px"
+                    >(works offline without this)</span
+                  >
+                </summary>
+                <div class="bd" style="padding-top: 0">
+                  <div class="help">
+                    This file loads Space Grotesk + Inter for the app chrome.
+                    Generated preview fonts use fallbacks offline. If you want
+                    higher fidelity for some preview fonts, add Google Fonts
+                    links yourself later.
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <h2>Accessibility</h2>
+              <span class="muted" style="font-size: 12px">Contrast checks</span>
+            </div>
+            <div class="bd stack">
+              <div class="badges" id="a11yBadges"></div>
+              <div class="help">
+                Checks: text on background, text on surface, and button text on
+                primary (accent).
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <h2>Favorites</h2>
+              <div class="row" style="gap: 8px">
+                <button class="btn small" id="btnClearFavs" type="button">
+                  Clear All
+                </button>
+              </div>
+            </div>
+            <div class="bd">
+              <div class="fav-list" id="favList"></div>
+              <div class="help">
+                Favorites are saved to localStorage on this device.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT: Preview -->
+        <section class="previewWrap">
+          <div
+            class="preview"
+            aria-label="Live preview using generated palette and fonts"
+          >
+            <div class="frame" id="previewFrame">
+              <div class="kit-hero">
+                <h3 id="previewTitle">Design that looks intentional.</h3>
+                <p id="previewPara">
+                  This UI kit previews your generated palette + font pairing in
+                  a realistic, SaaS-style layout. Keep the chrome neutral; apply
+                  the theme here.
+                </p>
+                <div class="kit-actions">
+                  <button class="kit-btn primary" type="button">
+                    Primary Action
+                  </button>
+                  <button class="kit-btn secondary" type="button">
+                    Secondary
+                  </button>
+                  <a
+                    class="kit-link"
+                    href="javascript:void(0)"
+                    aria-label="Example link"
+                    >Example link</a
+                  >
+                </div>
+              </div>
+
+              <div class="kit-grid">
+                <div class="kit-card">
+                  <h4>Card Title</h4>
+                  <p>
+                    Cards should feel calm and readable. Your accent color shows
+                    up in subtle UI affordances and highlights.
+                  </p>
+                  <span class="kit-pill">Pill / Tag</span>
+                </div>
+
+                <div class="kit-card">
+                  <div class="kit-form">
+                    <div class="kit-label">Small Form Input</div>
+                    <input class="kit-input" placeholder="Type something…" />
+                    <button
+                      class="kit-btn primary"
+                      type="button"
+                      style="justify-content: center"
+                    >
+                      Submit
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="kit-card">
+                <h4>Preview Notes</h4>
+                <p>
+                  <span class="mono">background</span> is the page color.
+                  <span class="mono">surface</span> is the card color.
+                  <span class="mono">accent</span> is the primary CTA color.
+                  <span class="mono">text</span> +
+                  <span class="mono">muted</span> drive readability.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        /* =========================
+         Utilities
+      ========================= */
+
+        const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+        const pad2 = (n) => String(n).padStart(2, "0");
+        const nowISO = () => new Date().toISOString();
+        const fmtDate = (iso) => {
+          try {
+            const d = new Date(iso);
+            return d.toLocaleString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          } catch {
+            return iso;
+          }
+        };
+
+        const qs = (sel, root = document) => root.querySelector(sel);
+        const qsa = (sel, root = document) =>
+          Array.from(root.querySelectorAll(sel));
+
+        // Mulberry32 PRNG with 32-bit seed
+        const mulberry32 = (seed) => {
+          let a = seed >>> 0;
+          return () => {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        };
+
+        const randomInt = (rng, min, max) =>
+          Math.floor(rng() * (max - min + 1)) + min;
+
+        // HSL <-> HEX helpers
+        const hslToRgb = (h, s, l) => {
+          h = ((h % 360) + 360) % 360;
+          s = clamp(s, 0, 100) / 100;
+          l = clamp(l, 0, 100) / 100;
+          const c = (1 - Math.abs(2 * l - 1)) * s;
+          const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+          const m = l - c / 2;
+          let r = 0,
+            g = 0,
+            b = 0;
+          if (h < 60) [r, g, b] = [c, x, 0];
+          else if (h < 120) [r, g, b] = [x, c, 0];
+          else if (h < 180) [r, g, b] = [0, c, x];
+          else if (h < 240) [r, g, b] = [0, x, c];
+          else if (h < 300) [r, g, b] = [x, 0, c];
+          else [r, g, b] = [c, 0, x];
+          return {
+            r: Math.round((r + m) * 255),
+            g: Math.round((g + m) * 255),
+            b: Math.round((b + m) * 255),
+          };
+        };
+
+        const rgbToHex = ({ r, g, b }) =>
+          `#${pad2(r.toString(16))}${pad2(g.toString(16))}${pad2(b.toString(16))}`.toUpperCase();
+
+        const hexToRgb = (hex) => {
+          const h = hex.replace("#", "").trim();
+          if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+          return {
+            r: parseInt(h.slice(0, 2), 16),
+            g: parseInt(h.slice(2, 4), 16),
+            b: parseInt(h.slice(4, 6), 16),
+          };
+        };
+
+        // Relative luminance + contrast ratio (WCAG)
+        const srgbToLin = (c) => {
+          const v = c / 255;
+          return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        const luminance = (rgb) => {
+          const r = srgbToLin(rgb.r),
+            g = srgbToLin(rgb.g),
+            b = srgbToLin(rgb.b);
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const contrastRatio = (hexA, hexB) => {
+          const a = hexToRgb(hexA),
+            b = hexToRgb(hexB);
+          if (!a || !b) return 1;
+          const L1 = luminance(a),
+            L2 = luminance(b);
+          const lighter = Math.max(L1, L2),
+            darker = Math.min(L1, L2);
+          return (lighter + 0.05) / (darker + 0.05);
+        };
+
+        const wcagBadge = (ratio, context = "normal") => {
+          // normal text thresholds: AA 4.5, AAA 7
+          // large text thresholds: AA 3, AAA 4.5
+          const AA = context === "large" ? 3 : 4.5;
+          const AAA = context === "large" ? 4.5 : 7;
+          if (ratio >= AAA) return { level: "AAA", status: "ok" };
+          if (ratio >= AA) return { level: "AA", status: "ok" };
+          if (ratio >= AA - 0.5) return { level: "Near", status: "warn" };
+          return { level: "Fail", status: "fail" };
+        };
+
+        // Clipboard
+        const copyText = async (text) => {
+          try {
+            await navigator.clipboard.writeText(text);
+            return true;
+          } catch {
+            // fallback
+            try {
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.setAttribute("readonly", "");
+              ta.style.position = "fixed";
+              ta.style.left = "-9999px";
+              document.body.appendChild(ta);
+              ta.select();
+              const ok = document.execCommand("copy");
+              document.body.removeChild(ta);
+              return ok;
+            } catch {
+              return false;
+            }
+          }
+        };
+
+        /* =========================
+         Constants
+      ========================= */
+
+        const ROLES = [
+          "background",
+          "surface",
+          "primary",
+          "secondary",
+          "accent",
+          "text",
+          "muted",
+        ];
+
+        // Curated font list: common, safe, "Google-font-like" names.
+        // No API calls required; offline fallbacks will render system fonts.
+        const FONT_POOL = [
+          {
+            name: "Inter",
+            stack: `"Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Space Grotesk",
+            stack: `"Space Grotesk", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Manrope",
+            stack: `"Manrope", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Plus Jakarta Sans",
+            stack: `"Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "DM Sans",
+            stack: `"DM Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Sora",
+            stack: `"Sora", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Montserrat",
+            stack: `"Montserrat", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Poppins",
+            stack: `"Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Work Sans",
+            stack: `"Work Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Nunito Sans",
+            stack: `"Nunito Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Source Sans 3",
+            stack: `"Source Sans 3", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "IBM Plex Sans",
+            stack: `"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Roboto",
+            stack: `Roboto, ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial`,
+          },
+          {
+            name: "System UI",
+            stack: `ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`,
+          },
+          {
+            name: "Georgia",
+            stack: `Georgia, "Times New Roman", Times, serif`,
+          },
+          {
+            name: "Garamond",
+            stack: `Garamond, "Times New Roman", Times, serif`,
+          },
+          { name: "Times New Roman", stack: `"Times New Roman", Times, serif` },
+          {
+            name: "Courier New",
+            stack: `"Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace`,
+          },
+        ];
+
+        const STORAGE_KEYS = {
+          last: "ag:lastCombo:v1",
+          favs: "ag:favorites:v1",
+        };
+
+        /* =========================
+         State
+      ========================= */
+
+        const state = {
+          seed: 0,
+          palette: {
+            background: "#FFFFFF",
+            surface: "#FFFFFF",
+            primary: "#111827",
+            secondary: "#475569",
+            accent: "#2563EB",
+            text: "#0F172A",
+            muted: "#64748B",
+          },
+          locks: {
+            background: false,
+            surface: false,
+            primary: false,
+            secondary: false,
+            accent: false,
+            text: false,
+            muted: false,
+            headingFont: false,
+            bodyFont: false,
+          },
+          fonts: {
+            heading: FONT_POOL[1], // Space Grotesk
+            body: FONT_POOL[0], // Inter
+          },
+          favorites: [],
+        };
+
+        /* =========================
+         Seed + URL
+      ========================= */
+
+        const parseSeedFromURL = () => {
+          const url = new URL(window.location.href);
+          const s = url.searchParams.get("seed");
+          if (s == null) return null;
+          const num = Number(s);
+          if (!Number.isFinite(num)) return null;
+          return num >>> 0;
+        };
+
+        const setURLSeed = (seed) => {
+          const url = new URL(window.location.href);
+          url.searchParams.set("seed", String(seed >>> 0));
+          history.replaceState({}, "", url.toString());
+        };
+
+        const makeShareURL = (seed) => {
+          const url = new URL(window.location.href);
+          url.searchParams.set("seed", String(seed >>> 0));
+          return url.toString();
+        };
+
+        /* =========================
+         Palette Generation (sensible constraints)
+      ========================= */
+
+        const pickThemeMode = (rng) => (rng() < 0.72 ? "light" : "dark");
+
+        const generateBase = (rng, mode) => {
+          // Softer backgrounds and calm surfaces
+          const bgHue = randomInt(rng, 0, 359);
+          const bgSat =
+            mode === "light" ? randomInt(rng, 6, 18) : randomInt(rng, 10, 22);
+          const bgLight =
+            mode === "light" ? randomInt(rng, 94, 98) : randomInt(rng, 10, 16);
+
+          const surfaceLight =
+            mode === "light"
+              ? clamp(bgLight - randomInt(rng, 0, 3), 90, 99)
+              : clamp(bgLight + randomInt(rng, 3, 8), 12, 22);
+
+          const bg = rgbToHex(hslToRgb(bgHue, bgSat, bgLight));
+          const surface = rgbToHex(
+            hslToRgb(bgHue, clamp(bgSat - 2, 0, 24), surfaceLight),
+          );
+
+          // Text colors chosen for readability
+          const text = mode === "light" ? "#0F172A" : "#F8FAFC";
+          const muted = mode === "light" ? "#64748B" : "#A7B3C5";
+
+          // Strong accent color
+          const accHue = (bgHue + randomInt(rng, 100, 220)) % 360;
+          const accSat = randomInt(rng, 55, 85);
+          const accLight =
+            mode === "light" ? randomInt(rng, 42, 56) : randomInt(rng, 50, 64);
+          const accent = rgbToHex(hslToRgb(accHue, accSat, accLight));
+
+          // Primary/secondary are supporting UI colors (not necessarily CTAs)
+          const priHue = (accHue + randomInt(rng, -30, 30) + 360) % 360;
+          const secHue = (bgHue + randomInt(rng, 20, 60)) % 360;
+
+          const primary = rgbToHex(
+            hslToRgb(
+              priHue,
+              randomInt(rng, 18, 35),
+              mode === "light"
+                ? randomInt(rng, 22, 34)
+                : randomInt(rng, 62, 76),
+            ),
+          );
+          const secondary = rgbToHex(
+            hslToRgb(
+              secHue,
+              randomInt(rng, 14, 28),
+              mode === "light"
+                ? randomInt(rng, 38, 52)
+                : randomInt(rng, 48, 62),
+            ),
+          );
+
+          return {
+            background: bg,
+            surface,
+            primary,
+            secondary,
+            accent,
+            text,
+            muted,
+            mode,
+          };
+        };
+
+        // Ensure text readable against bg & surface by shifting toward extremes if needed
+        const adjustForContrast = (pal) => {
+          const out = { ...pal };
+          const text = out.text;
+
+          const minAA = 4.5;
+          const tries = 8;
+
+          const nudge = (hex, dir /* -1 darker, +1 lighter */) => {
+            const rgb = hexToRgb(hex);
+            if (!rgb) return hex;
+            const amt = 12;
+            const r = clamp(rgb.r + dir * amt, 0, 255);
+            const g = clamp(rgb.g + dir * amt, 0, 255);
+            const b = clamp(rgb.b + dir * amt, 0, 255);
+            return rgbToHex({ r, g, b });
+          };
+
+          // For light mode, nudge backgrounds lighter if text is dark; for dark mode, nudge darker.
+          const textLum = luminance(hexToRgb(text));
+          const wantsDarkBg = textLum > 0.6; // light text => dark background
+
+          for (let i = 0; i < tries; i++) {
+            const r1 = contrastRatio(out.text, out.background);
+            const r2 = contrastRatio(out.text, out.surface);
+            if (r1 >= minAA && r2 >= minAA) break;
+
+            if (r1 < minAA) {
+              out.background = nudge(out.background, wantsDarkBg ? -1 : +1);
+            }
+            if (r2 < minAA) {
+              out.surface = nudge(out.surface, wantsDarkBg ? -1 : +1);
+            }
+          }
+
+          // Ensure button text on accent is readable (use background or text depending)
+          // We'll compute button text dynamically in render, but ensure accent isn't too close.
+          // If contrast between chosen button text and accent is low, nudge accent.
+          const btnTextCandidate = pickBestTextOn(
+            out.accent,
+            out.text,
+            out.background,
+          );
+          for (let i = 0; i < tries; i++) {
+            const r = contrastRatio(btnTextCandidate, out.accent);
+            if (r >= 4.5) break;
+            // Nudge accent away from btnTextCandidate: if btn text is light -> darken accent, else lighten.
+            const dir = luminance(hexToRgb(btnTextCandidate)) > 0.6 ? -1 : +1;
+            out.accent = nudge(out.accent, dir);
+          }
+
+          return out;
+        };
+
+        const pickBestTextOn = (bgHex, optionA, optionB) => {
+          const rA = contrastRatio(optionA, bgHex);
+          const rB = contrastRatio(optionB, bgHex);
+          return rA >= rB ? optionA : optionB;
+        };
+
+        const generatePalette = (seed, locks, currentPalette) => {
+          const rng = mulberry32(seed >>> 0);
+          const mode = pickThemeMode(rng);
+          const base = adjustForContrast(generateBase(rng, mode));
+
+          const next = { ...currentPalette };
+          for (const role of ROLES) {
+            if (!locks[role]) next[role] = base[role];
+          }
+          return next;
+        };
+
+        /* =========================
+         Font Generation
+      ========================= */
+
+        const pickFont = (rng, excludeName = null) => {
+          // Weighted-ish: prefer modern sans for headings + body, but include some variety.
+          const sans = FONT_POOL.filter((f) =>
+            /sans|Inter|Grotesk|Roboto|System UI|Manrope|Jakarta|DM Sans|Sora|Montserrat|Poppins|Work Sans|Nunito|Source Sans|IBM Plex/i.test(
+              f.name,
+            ),
+          );
+          const serif = FONT_POOL.filter((f) =>
+            /Georgia|Garamond|Times/i.test(f.name),
+          );
+          const mono = FONT_POOL.filter((f) => /Courier/i.test(f.name));
+
+          const roll = rng();
+          let pool = sans;
+          if (roll > 0.86 && serif.length) pool = serif;
+          if (roll > 0.95 && mono.length) pool = mono;
+
+          // Avoid exclude
+          const filtered = pool.filter((f) => f.name !== excludeName);
+          const use = filtered.length
+            ? filtered
+            : FONT_POOL.filter((f) => f.name !== excludeName);
+          return use[randomInt(rng, 0, use.length - 1)];
+        };
+
+        const generateFonts = (seed, locks, currentFonts) => {
+          const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+
+          const next = { ...currentFonts };
+
+          if (!locks.headingFont) {
+            next.heading = pickFont(
+              rng,
+              locks.bodyFont ? currentFonts.body.name : null,
+            );
+          }
+          if (!locks.bodyFont) {
+            next.body = pickFont(rng, next.heading?.name || null);
+          }
+          // If both unlocked, ensure not identical
+          if (
+            !locks.headingFont &&
+            !locks.bodyFont &&
+            next.heading.name === next.body.name
+          ) {
+            next.body = pickFont(rng, next.heading.name);
+          }
+
+          return next;
+        };
+
+        /* =========================
+         Storage
+      ========================= */
+
+        const loadJSON = (key, fallback) => {
+          try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return fallback;
+            return JSON.parse(raw);
+          } catch {
+            return fallback;
+          }
+        };
+
+        const saveJSON = (key, value) => {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch {}
+        };
+
+        const loadPersisted = () => {
+          const favs = loadJSON(STORAGE_KEYS.favs, []);
+          state.favorites = Array.isArray(favs) ? favs : [];
+
+          const last = loadJSON(STORAGE_KEYS.last, null);
+          if (last && typeof last === "object") {
+            if (typeof last.seed === "number") state.seed = last.seed >>> 0;
+            if (last.palette)
+              state.palette = { ...state.palette, ...last.palette };
+            if (last.fonts) {
+              state.fonts.heading =
+                resolveFont(last.fonts.heading) || state.fonts.heading;
+              state.fonts.body =
+                resolveFont(last.fonts.body) || state.fonts.body;
+            }
+            if (last.locks) state.locks = { ...state.locks, ...last.locks };
+          }
+        };
+
+        const persistLast = () => {
+          saveJSON(STORAGE_KEYS.last, {
+            seed: state.seed >>> 0,
+            palette: state.palette,
+            fonts: {
+              heading: state.fonts.heading.name,
+              body: state.fonts.body.name,
+            },
+            locks: state.locks,
+            savedAt: nowISO(),
+          });
+        };
+
+        const resolveFont = (nameOrObj) => {
+          if (!nameOrObj) return null;
+          if (typeof nameOrObj === "string") {
+            return FONT_POOL.find((f) => f.name === nameOrObj) || null;
+          }
+          if (
+            typeof nameOrObj === "object" &&
+            typeof nameOrObj.name === "string"
+          ) {
+            return FONT_POOL.find((f) => f.name === nameOrObj.name) || null;
+          }
+          return null;
+        };
+
+        /* =========================
+         Render
+      ========================= */
+
+        const els = {
+          seedText: qs("#seedText"),
+          seedInput: qs("#seedInput"),
+          btnCopySeed: qs("#btnCopySeed"),
+          btnCopyShare: qs("#btnCopyShare"),
+          btnNewSeed: qs("#btnNewSeed"),
+          btnRegenAll: qs("#btnRegenAll"),
+          btnRegenUnlocked: qs("#btnRegenUnlocked"),
+          btnResetLocks: qs("#btnResetLocks"),
+          btnCopyAll: qs("#btnCopyAll"),
+          btnCopyVars: qs("#btnCopyVars"),
+          btnSaveFav: qs("#btnSaveFav"),
+          btnClearFavs: qs("#btnClearFavs"),
+          favName: qs("#favName"),
+          roles: qs("#roles"),
+          a11yBadges: qs("#a11yBadges"),
+          favList: qs("#favList"),
+          previewFrame: qs("#previewFrame"),
+          toast: qs("#toast"),
+          headingFontText: qs("#headingFontText"),
+          bodyFontText: qs("#bodyFontText"),
+          lockHeadingFont: qs("#lockHeadingFont"),
+          lockBodyFont: qs("#lockBodyFont"),
+          btnCopyHeadingFont: qs("#btnCopyHeadingFont"),
+          btnCopyBodyFont: qs("#btnCopyBodyFont"),
+          btnCopyFontCSS: qs("#btnCopyFontCSS"),
+          btnLoadFontsHint: qs("#btnLoadFontsHint"),
+        };
+
+        const renderRoles = () => {
+          els.roles.innerHTML = "";
+          const frag = document.createDocumentFragment();
+
+          for (const role of ROLES) {
+            const hex = state.palette[role];
+            const locked = !!state.locks[role];
+
+            const wrap = document.createElement("div");
+            wrap.className = "role";
+            wrap.dataset.role = role;
+
+            const left = document.createElement("div");
+            left.className = "role-left";
+
+            const sw = document.createElement("div");
+            sw.className = "swatch";
+            sw.style.background = hex;
+
+            const meta = document.createElement("div");
+            meta.className = "role-meta";
+            const name = document.createElement("p");
+            name.className = "role-name";
+            name.textContent = role;
+
+            const sub = document.createElement("p");
+            sub.className = "role-hex mono";
+            sub.textContent = hex;
+
+            meta.appendChild(name);
+            meta.appendChild(sub);
+
+            left.appendChild(sw);
+            left.appendChild(meta);
+
+            const actions = document.createElement("div");
+            actions.className = "role-actions";
+
+            const lockBtn = document.createElement("button");
+            lockBtn.className = "toggle";
+            lockBtn.type = "button";
+            lockBtn.setAttribute("aria-pressed", locked ? "true" : "false");
+            lockBtn.setAttribute("aria-label", `Lock ${role}`);
+            lockBtn.innerHTML = `<span class="dot" aria-hidden="true"></span> Lock`;
+
+            const copyBtn = document.createElement("button");
+            copyBtn.className = "btn small";
+            copyBtn.type = "button";
+            copyBtn.textContent = "Copy";
+            copyBtn.setAttribute("aria-label", `Copy ${role} color hex`);
+
+            // Events
+            lockBtn.addEventListener("click", () => {
+              state.locks[role] = !state.locks[role];
+              lockBtn.setAttribute(
+                "aria-pressed",
+                state.locks[role] ? "true" : "false",
+              );
+              persistLast();
+              toast(`Lock ${state.locks[role] ? "enabled" : "disabled"}`, role);
+            });
+
+            copyBtn.addEventListener("click", async () => {
+              const ok = await copyText(hex);
+              toast(ok ? "Copied" : "Copy failed", `${role}: ${hex}`);
+            });
+
+            actions.appendChild(lockBtn);
+            actions.appendChild(copyBtn);
+
+            wrap.appendChild(left);
+            wrap.appendChild(actions);
+            frag.appendChild(wrap);
+          }
+
+          els.roles.appendChild(frag);
+        };
+
+        const renderFonts = () => {
+          els.headingFontText.textContent = state.fonts.heading.name;
+          els.bodyFontText.textContent = state.fonts.body.name;
+
+          els.lockHeadingFont.setAttribute(
+            "aria-pressed",
+            state.locks.headingFont ? "true" : "false",
+          );
+          els.lockBodyFont.setAttribute(
+            "aria-pressed",
+            state.locks.bodyFont ? "true" : "false",
+          );
+        };
+
+        const renderPreview = () => {
+          const f = els.previewFrame;
+
+          // CSS variables for preview scope
+          f.style.setProperty("--p-bg", state.palette.background);
+          f.style.setProperty("--p-surface", state.palette.surface);
+          f.style.setProperty("--p-primary", state.palette.primary);
+          f.style.setProperty("--p-secondary", state.palette.secondary);
+          f.style.setProperty("--p-accent", state.palette.accent);
+          f.style.setProperty("--p-text", state.palette.text);
+          f.style.setProperty("--p-muted", state.palette.muted);
+
+          f.style.setProperty("--p-h", state.fonts.heading.stack);
+          f.style.setProperty("--p-b", state.fonts.body.stack);
+
+          // Ensure kit primary button text is readable: prefer background, otherwise text.
+          const btnText = pickBestTextOn(
+            state.palette.accent,
+            state.palette.background,
+            state.palette.text,
+          );
+          // Apply to all .kit-btn.primary
+          qsa(".kit-btn.primary", f).forEach((btn) => {
+            btn.style.color = btnText;
+          });
+        };
+
+        const renderA11y = () => {
+          const items = [
+            {
+              key: "text_on_bg",
+              label: "Text on background",
+              ratio: contrastRatio(
+                state.palette.text,
+                state.palette.background,
+              ),
+              context: "normal",
+            },
+            {
+              key: "text_on_surface",
+              label: "Text on surface",
+              ratio: contrastRatio(state.palette.text, state.palette.surface),
+              context: "normal",
+            },
+            (() => {
+              const btnText = pickBestTextOn(
+                state.palette.accent,
+                state.palette.background,
+                state.palette.text,
+              );
+              return {
+                key: "btn_text_on_accent",
+                label: "Button text on accent",
+                ratio: contrastRatio(btnText, state.palette.accent),
+                context: "normal",
+                extra: `(${btnText} on ${state.palette.accent})`,
+              };
+            })(),
+          ];
+
+          els.a11yBadges.innerHTML = "";
+          for (const it of items) {
+            const b = wcagBadge(it.ratio, it.context);
+            const el = document.createElement("div");
+            el.className = `badge ${b.status}`;
+            const ratioText = `${it.ratio.toFixed(2)}:1`;
+            el.innerHTML = `<strong>${b.level}</strong> <span>${it.label}</span> <span class="mono">${ratioText}</span>`;
+            if (it.extra) {
+              el.title = it.extra;
+            }
+            els.a11yBadges.appendChild(el);
+          }
+        };
+
+        const renderFavorites = () => {
+          els.favList.innerHTML = "";
+          if (!state.favorites.length) {
+            els.favList.innerHTML = `<div class="muted" style="font-size:13px;">No favorites yet. Save one when you like a combo.</div>`;
+            return;
+          }
+
+          const frag = document.createDocumentFragment();
+          for (const fav of state.favorites) {
+            const wrap = document.createElement("div");
+            wrap.className = "fav";
+            wrap.dataset.id = fav.id;
+
+            const top = document.createElement("div");
+            top.className = "fav-top";
+
+            const title = document.createElement("div");
+            title.className = "fav-title";
+            const nm = document.createElement("strong");
+            nm.textContent = fav.name || `Favorite • ${fav.seed}`;
+            const meta = document.createElement("span");
+            const fonts = `${fav.fonts.heading} / ${fav.fonts.body}`;
+            meta.textContent = `${fmtDate(fav.savedAt)} • Seed ${fav.seed} • ${fonts}`;
+
+            title.appendChild(nm);
+            title.appendChild(meta);
+
+            const actions = document.createElement("div");
+            actions.className = "role-actions";
+
+            const applyBtn = document.createElement("button");
+            applyBtn.className = "btn small";
+            applyBtn.type = "button";
+            applyBtn.textContent = "Load";
+            applyBtn.setAttribute("aria-label", "Load favorite");
+
+            const delBtn = document.createElement("button");
+            delBtn.className = "btn small danger";
+            delBtn.type = "button";
+            delBtn.textContent = "Delete";
+            delBtn.setAttribute("aria-label", "Delete favorite");
+
+            actions.appendChild(applyBtn);
+            actions.appendChild(delBtn);
+
+            top.appendChild(title);
+            top.appendChild(actions);
+
+            const swatches = document.createElement("div");
+            swatches.className = "fav-swatches";
+            for (const role of ROLES) {
+              const s = document.createElement("div");
+              s.className = "mini";
+              s.style.background = fav.palette[role];
+              s.title = `${role}: ${fav.palette[role]}`;
+              swatches.appendChild(s);
+            }
+
+            wrap.appendChild(top);
+            wrap.appendChild(swatches);
+            frag.appendChild(wrap);
+
+            applyBtn.addEventListener("click", () => {
+              applyFavorite(fav.id);
+            });
+            delBtn.addEventListener("click", () => {
+              deleteFavorite(fav.id);
+            });
+          }
+
+          els.favList.appendChild(frag);
+        };
+
+        const renderAll = () => {
+          els.seedText.textContent = String(state.seed >>> 0);
+          els.seedInput.value = String(state.seed >>> 0);
+
+          renderRoles();
+          renderFonts();
+          renderPreview();
+          renderA11y();
+          renderFavorites();
+        };
+
+        /* =========================
+         Actions
+      ========================= */
+
+        const toast = (title, sub = null) => {
+          const t = els.toast;
+          t.innerHTML = `${escapeHTML(title)}${sub ? `<span class="sub">${escapeHTML(sub)}</span>` : ""}`;
+          t.classList.add("show");
+          clearTimeout(toast._t);
+          toast._t = setTimeout(() => t.classList.remove("show"), 1800);
+        };
+
+        const escapeHTML = (s) =>
+          String(s)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+
+        const setSeed = (seed, { updateURL = true } = {}) => {
+          state.seed = seed >>> 0;
+          if (updateURL) setURLSeed(state.seed);
+          els.seedText.textContent = String(state.seed);
+          els.seedInput.value = String(state.seed);
+        };
+
+        const regenAll = () => {
+          state.palette = generatePalette(
+            state.seed,
+            state.locks,
+            state.palette,
+          );
+          state.fonts = generateFonts(state.seed, state.locks, state.fonts);
+          persistLast();
+          renderAll();
+          toast("Regenerated", `Seed ${state.seed}`);
+        };
+
+        const regenUnlocked = () => {
+          // Keep locked items, regenerate the rest using the current seed.
+          state.palette = generatePalette(
+            state.seed,
+            state.locks,
+            state.palette,
+          );
+          state.fonts = generateFonts(state.seed, state.locks, state.fonts);
+          persistLast();
+          renderAll();
+          toast("Regenerated (unlocked)", `Seed ${state.seed}`);
+        };
+
+        const newSeed = () => {
+          const seed = Math.floor(Math.random() * 2 ** 32) >>> 0;
+          setSeed(seed, { updateURL: true });
+          regenUnlocked();
+        };
+
+        const resetLocks = () => {
+          for (const role of ROLES) state.locks[role] = false;
+          state.locks.headingFont = false;
+          state.locks.bodyFont = false;
+          persistLast();
+          renderAll();
+          toast("All locks cleared");
+        };
+
+        const copyAllColors = async () => {
+          const lines = ROLES.map((r) => `${r}: ${state.palette[r]}`);
+          const txt = lines.join("\n");
+          const ok = await copyText(txt);
+          toast(
+            ok ? "Copied all colors" : "Copy failed",
+            ok ? "Neat list" : null,
+          );
+        };
+
+        const copyCSSVars = async () => {
+          const lines = ROLES.map((r) => `  --${r}: ${state.palette[r]};`);
+          const txt = `:root{\n${lines.join("\n")}\n}`;
+          const ok = await copyText(txt);
+          toast(ok ? "Copied CSS variables" : "Copy failed");
+        };
+
+        const copyFontCSS = async () => {
+          const txt = [
+            `/* Preview font pairing */`,
+            `--preview-heading-font: ${state.fonts.heading.stack};`,
+            `--preview-body-font: ${state.fonts.body.stack};`,
+            ``,
+            `/* Example usage */`,
+            `.preview-scope h1, .preview-scope h2, .preview-scope h3 { font-family: var(--preview-heading-font); }`,
+            `.preview-scope { font-family: var(--preview-body-font); }`,
+          ].join("\n");
+          const ok = await copyText(txt);
+          toast(ok ? "Copied font CSS" : "Copy failed");
+        };
+
+        const saveFavorite = () => {
+          const name = (els.favName.value || "").trim();
+          const fav = {
+            id: cryptoRandomId(),
+            name: name || null,
+            seed: state.seed >>> 0,
+            palette: { ...state.palette },
+            fonts: {
+              heading: state.fonts.heading.name,
+              body: state.fonts.body.name,
+            },
+            savedAt: nowISO(),
+          };
+          state.favorites.unshift(fav);
+          state.favorites = state.favorites.slice(0, 50); // reasonable cap
+          saveJSON(STORAGE_KEYS.favs, state.favorites);
+          toast("Saved favorite", name || `Seed ${fav.seed}`);
+          renderFavorites();
+        };
+
+        const applyFavorite = (id) => {
+          const fav = state.favorites.find((f) => f.id === id);
+          if (!fav) return;
+          setSeed(fav.seed, { updateURL: true });
+
+          // Apply palette and fonts directly (regardless of locks; favorites are explicit)
+          state.palette = { ...state.palette, ...fav.palette };
+          state.fonts.heading =
+            resolveFont(fav.fonts.heading) || state.fonts.heading;
+          state.fonts.body = resolveFont(fav.fonts.body) || state.fonts.body;
+
+          persistLast();
+          renderAll();
+          toast("Loaded favorite", fav.name || `Seed ${fav.seed}`);
+        };
+
+        const deleteFavorite = (id) => {
+          state.favorites = state.favorites.filter((f) => f.id !== id);
+          saveJSON(STORAGE_KEYS.favs, state.favorites);
+          renderFavorites();
+          toast("Deleted favorite");
+        };
+
+        const clearFavorites = () => {
+          state.favorites = [];
+          saveJSON(STORAGE_KEYS.favs, state.favorites);
+          renderFavorites();
+          toast("Cleared favorites");
+        };
+
+        const cryptoRandomId = () => {
+          // Offline-friendly, collision-resistant enough for local favorites
+          try {
+            const buf = new Uint8Array(10);
+            crypto.getRandomValues(buf);
+            return Array.from(buf)
+              .map((b) => b.toString(16).padStart(2, "0"))
+              .join("");
+          } catch {
+            return (
+              String(Date.now()) + "-" + Math.random().toString(16).slice(2)
+            );
+          }
+        };
+
+        /* =========================
+         Events
+      ========================= */
+
+        const bindEvents = () => {
+          els.btnRegenAll.addEventListener("click", () => {
+            // Regenerate all implies a new seed? Spec: "Regenerate All creates a new combo".
+            // We'll keep seed unless user wants new seed; but a "new combo" can still be from current seed.
+            // Here: bump seed deterministically so it's shareable and predictable.
+            setSeed((state.seed + 1) >>> 0, { updateURL: true });
+            regenUnlocked();
+          });
+
+          els.btnRegenUnlocked.addEventListener("click", () => regenUnlocked());
+
+          els.btnNewSeed.addEventListener("click", () => newSeed());
+
+          els.seedInput.addEventListener("change", () => {
+            const num = Number(els.seedInput.value.trim());
+            if (!Number.isFinite(num)) {
+              toast("Invalid seed", "Enter a number");
+              els.seedInput.value = String(state.seed);
+              return;
+            }
+            setSeed(num >>> 0, { updateURL: true });
+            regenUnlocked();
+          });
+
+          els.btnCopySeed.addEventListener("click", async () => {
+            const ok = await copyText(String(state.seed >>> 0));
+            toast(ok ? "Copied seed" : "Copy failed");
+          });
+
+          els.btnCopyShare.addEventListener("click", async () => {
+            const url = makeShareURL(state.seed >>> 0);
+            const ok = await copyText(url);
+            toast(ok ? "Copied share URL" : "Copy failed");
+          });
+
+          els.btnResetLocks.addEventListener("click", () => resetLocks());
+
+          els.btnCopyAll.addEventListener("click", () => copyAllColors());
+          els.btnCopyVars.addEventListener("click", () => copyCSSVars());
+
+          els.btnSaveFav.addEventListener("click", () => saveFavorite());
+          els.btnClearFavs.addEventListener("click", () => clearFavorites());
+
+          els.lockHeadingFont.addEventListener("click", () => {
+            state.locks.headingFont = !state.locks.headingFont;
+            persistLast();
+            renderFonts();
+            toast(
+              `Heading font lock ${state.locks.headingFont ? "enabled" : "disabled"}`,
+            );
+          });
+
+          els.lockBodyFont.addEventListener("click", () => {
+            state.locks.bodyFont = !state.locks.bodyFont;
+            persistLast();
+            renderFonts();
+            toast(
+              `Body font lock ${state.locks.bodyFont ? "enabled" : "disabled"}`,
+            );
+          });
+
+          els.btnCopyHeadingFont.addEventListener("click", async () => {
+            const txt = `font-family: ${state.fonts.heading.stack};`;
+            const ok = await copyText(txt);
+            toast(
+              ok ? "Copied heading font" : "Copy failed",
+              state.fonts.heading.name,
+            );
+          });
+
+          els.btnCopyBodyFont.addEventListener("click", async () => {
+            const txt = `font-family: ${state.fonts.body.stack};`;
+            const ok = await copyText(txt);
+            toast(
+              ok ? "Copied body font" : "Copy failed",
+              state.fonts.body.name,
+            );
+          });
+
+          els.btnCopyFontCSS.addEventListener("click", async () => {
+            await copyFontCSS();
+          });
+
+          els.btnLoadFontsHint.addEventListener("click", () => {
+            toast(
+              "Font loading is optional",
+              "Preview fonts fall back offline.",
+            );
+          });
+
+          // Keyboard: Cmd/Ctrl+Enter regenerates unlocked
+          window.addEventListener("keydown", (e) => {
+            const mod = e.metaKey || e.ctrlKey;
+            if (mod && e.key === "Enter") {
+              e.preventDefault();
+              regenUnlocked();
+            }
+          });
+        };
+
+        /* =========================
+         Init
+      ========================= */
+
+        const init = () => {
+          loadPersisted();
+
+          const urlSeed = parseSeedFromURL();
+          if (urlSeed != null) {
+            // If URL seed exists, it wins.
+            setSeed(urlSeed, { updateURL: true });
+          } else if (!state.seed) {
+            // If nothing persisted, initialize seed
+            setSeed(Math.floor(Math.random() * 2 ** 32) >>> 0, {
+              updateURL: true,
+            });
+          } else {
+            // Ensure URL reflects current seed
+            setURLSeed(state.seed);
+          }
+
+          // If we loaded persisted palette/fonts but URL seed is set, regenerate to match seed (respects locks)
+          // This keeps share links deterministic.
+          regenUnlocked();
+
+          bindEvents();
+          renderAll();
+        };
+
+        init();
+      })();
+    </script>
+  </body>
+</html>
