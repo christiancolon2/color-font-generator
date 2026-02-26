@@ -192,25 +192,30 @@ This is separate from the generated preview theme.
 
 ## 📁 Project Structure
 
-````txt
-.
+```txt
+
 ├── index.html
 ├── favicon.png
 └── README.md
+```
 
 ## 🔧 Setup / Run Locally
 
 No install required.
 
 ### Option 1: Open directly
+
 - Double click `index.html`
 
 ### Option 2: Simple local server (recommended)
+
 This avoids some browser restrictions in certain environments.
 
 ```bash
 # Python 3
 python -m http.server 8000
+```
+
 Then open:
 http://localhost:8000
 
@@ -262,4 +267,7 @@ This project demonstrates:
 ## 📄 License
 
 MIT — free to use, modify, and ship.
-````
+
+```
+
+```
