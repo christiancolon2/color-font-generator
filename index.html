@@ -339,6 +339,13 @@
           box-shadow 0.12s ease;
         min-height: 38px;
       }
+
+      /* nicer color input sizing */
+      input[type="color"].input {
+        padding: 6px 10px;
+        height: 38px;
+      }
+
       .input:focus,
       select:focus {
         outline: none;
@@ -804,7 +811,7 @@
         </div>
 
         <div class="seedbar" aria-label="Seed controls">
-          <!-- NEW: Theme switch (respects prefers-color-scheme, with manual override) -->
+          <!-- Theme switch (respects prefers-color-scheme, with manual override) -->
           <span class="pill themeCtl" role="group" aria-label="Theme">
             <span class="themeLabel">Theme</span>
             <button
@@ -899,6 +906,58 @@
                   />
                   <div class="help">Used when saving a favorite.</div>
                 </div>
+              </div>
+
+              <!-- NEW: Palette Bias Controls -->
+              <div class="sep"></div>
+              <div class="grid2">
+                <div class="field">
+                  <label for="baseHue">Base color (influences palette)</label>
+                  <input
+                    class="input"
+                    id="baseHue"
+                    type="color"
+                    value="#3B82F6"
+                  />
+                  <div class="help">
+                    Sets the hue used for backgrounds/surfaces. Great for
+                    “brand-first” palettes.
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="satBias">
+                    Saturation bias
+                    <span class="mono" id="satBiasText">0</span>%
+                  </label>
+                  <input
+                    class="input"
+                    id="satBias"
+                    type="range"
+                    min="-30"
+                    max="30"
+                    step="1"
+                    value="0"
+                  />
+                  <div class="help">
+                    Negative = calmer/more neutral. Positive = more vibrant.
+                  </div>
+                </div>
+              </div>
+
+              <div class="row" style="gap: 8px; flex-wrap: wrap">
+                <button
+                  class="toggle"
+                  id="lockBaseHue"
+                  type="button"
+                  aria-pressed="false"
+                  aria-label="Lock base hue"
+                >
+                  <span class="dot" aria-hidden="true"></span> Lock base hue
+                </button>
+                <button class="btn small" id="btnResetBias" type="button">
+                  Reset bias
+                </button>
               </div>
 
               <div class="row">
@@ -1060,9 +1119,9 @@
                   "
                 >
                   Optional: add preview font links (manual)
-                  <span class="muted" style="font-weight: 600; font-size: 12px"
-                    >(works offline without this)</span
-                  >
+                  <span class="muted" style="font-weight: 600; font-size: 12px">
+                    (works offline without this)
+                  </span>
                 </summary>
                 <div class="bd" style="padding-top: 0">
                   <div class="help">
@@ -1263,6 +1322,43 @@
           };
         };
 
+        // NEW: RGB -> HSL and HEX -> Hue helpers
+        const rgbToHsl = ({ r, g, b }) => {
+          let rr = r / 255,
+            gg = g / 255,
+            bb = b / 255;
+          const max = Math.max(rr, gg, bb),
+            min = Math.min(rr, gg, bb);
+          let h = 0,
+            s = 0;
+          const l = (max + min) / 2;
+
+          const d = max - min;
+          if (d !== 0) {
+            s = d / (1 - Math.abs(2 * l - 1));
+            switch (max) {
+              case rr:
+                h = ((gg - bb) / d) % 6;
+                break;
+              case gg:
+                h = (bb - rr) / d + 2;
+                break;
+              case bb:
+                h = (rr - gg) / d + 4;
+                break;
+            }
+            h = Math.round(h * 60);
+            if (h < 0) h += 360;
+          }
+          return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
+        };
+
+        const hexToHue = (hex) => {
+          const rgb = hexToRgb(hex);
+          if (!rgb) return null;
+          return rgbToHsl(rgb).h;
+        };
+
         // Relative luminance + contrast ratio (WCAG)
         const srgbToLin = (c) => {
           const v = c / 255;
@@ -1411,7 +1507,8 @@
         const STORAGE_KEYS = {
           last: "ag:lastCombo:v1",
           favs: "ag:favorites:v1",
-          theme: "ag:theme:v1", // NEW
+          theme: "ag:theme:v1",
+          bias: "ag:bias:v1", // NEW
         };
 
         const THEME = {
@@ -1451,7 +1548,13 @@
             body: FONT_POOL[0], // Inter
           },
           favorites: [],
-          theme: THEME.AUTO, // NEW
+          theme: THEME.AUTO,
+          // NEW: palette bias controls
+          bias: {
+            baseHueHex: "#3B82F6",
+            satBias: 0,
+            lockBaseHue: false,
+          },
         };
 
         /* =========================
@@ -1567,16 +1670,31 @@
         };
 
         /* =========================
-         Palette Generation (sensible constraints)
+         Palette Generation (sensible constraints + bias)
       ========================= */
 
         const pickThemeMode = (rng) => (rng() < 0.72 ? "light" : "dark");
 
-        const generateBase = (rng, mode) => {
+        const generateBase = (rng, mode, bias) => {
+          const preferredHue = bias?.baseHueHex
+            ? hexToHue(bias.baseHueHex)
+            : null;
+          const satBias = clamp(bias?.satBias ?? 0, -30, 30);
+
+          // If locked, always use the chosen hue.
+          // If not locked but set, drift around it (still feels "influenced").
+          const bgHue =
+            bias?.lockBaseHue && preferredHue != null
+              ? preferredHue
+              : preferredHue != null
+                ? (preferredHue + randomInt(rng, -18, 18) + 360) % 360
+                : randomInt(rng, 0, 359);
+
           // Softer backgrounds and calm surfaces
-          const bgHue = randomInt(rng, 0, 359);
-          const bgSat =
+          const bgSatBase =
             mode === "light" ? randomInt(rng, 6, 18) : randomInt(rng, 10, 22);
+          const bgSat = clamp(bgSatBase + satBias * 0.35, 0, 30);
+
           const bgLight =
             mode === "light" ? randomInt(rng, 94, 98) : randomInt(rng, 10, 16);
 
@@ -1594,21 +1712,21 @@
           const text = mode === "light" ? "#0F172A" : "#F8FAFC";
           const muted = mode === "light" ? "#64748B" : "#A7B3C5";
 
-          // Strong accent color
+          // Strong accent color (complement-ish)
           const accHue = (bgHue + randomInt(rng, 100, 220)) % 360;
-          const accSat = randomInt(rng, 55, 85);
+          const accSat = clamp(randomInt(rng, 55, 85) + satBias * 0.7, 35, 95);
           const accLight =
             mode === "light" ? randomInt(rng, 42, 56) : randomInt(rng, 50, 64);
           const accent = rgbToHex(hslToRgb(accHue, accSat, accLight));
 
-          // Primary/secondary are supporting UI colors (not necessarily CTAs)
+          // Primary/secondary are supporting UI colors
           const priHue = (accHue + randomInt(rng, -30, 30) + 360) % 360;
           const secHue = (bgHue + randomInt(rng, 20, 60)) % 360;
 
           const primary = rgbToHex(
             hslToRgb(
               priHue,
-              randomInt(rng, 18, 35),
+              clamp(randomInt(rng, 18, 35) + satBias * 0.5, 8, 55),
               mode === "light"
                 ? randomInt(rng, 22, 34)
                 : randomInt(rng, 62, 76),
@@ -1617,7 +1735,7 @@
           const secondary = rgbToHex(
             hslToRgb(
               secHue,
-              randomInt(rng, 14, 28),
+              clamp(randomInt(rng, 14, 28) + satBias * 0.4, 6, 45),
               mode === "light"
                 ? randomInt(rng, 38, 52)
                 : randomInt(rng, 48, 62),
@@ -1671,7 +1789,7 @@
             }
           }
 
-          // Ensure button text on accent is readable (use background or text depending)
+          // Ensure button text on accent is readable
           const btnTextCandidate = pickBestTextOn(
             out.accent,
             out.text,
@@ -1696,7 +1814,7 @@
         const generatePalette = (seed, locks, currentPalette) => {
           const rng = mulberry32(seed >>> 0);
           const mode = pickThemeMode(rng);
-          const base = adjustForContrast(generateBase(rng, mode));
+          const base = adjustForContrast(generateBase(rng, mode, state.bias));
 
           const next = { ...currentPalette };
           for (const role of ROLES) {
@@ -1777,6 +1895,8 @@
           } catch {}
         };
 
+        const persistBias = () => saveJSON(STORAGE_KEYS.bias, state.bias);
+
         const loadPersisted = () => {
           const favs = loadJSON(STORAGE_KEYS.favs, []);
           state.favorites = Array.isArray(favs) ? favs : [];
@@ -1795,8 +1915,22 @@
             if (last.locks) state.locks = { ...state.locks, ...last.locks };
           }
 
-          // NEW: theme
+          // theme
           state.theme = loadTheme();
+
+          // NEW: bias
+          const bias = loadJSON(STORAGE_KEYS.bias, null);
+          if (bias && typeof bias === "object") {
+            if (typeof bias.baseHueHex === "string") {
+              state.bias.baseHueHex = bias.baseHueHex;
+            }
+            if (typeof bias.satBias === "number") {
+              state.bias.satBias = clamp(bias.satBias, -30, 30);
+            }
+            if (typeof bias.lockBaseHue === "boolean") {
+              state.bias.lockBaseHue = bias.lockBaseHue;
+            }
+          }
         };
 
         const persistLast = () => {
@@ -1858,9 +1992,15 @@
           btnCopyFontCSS: qs("#btnCopyFontCSS"),
           btnLoadFontsHint: qs("#btnLoadFontsHint"),
 
-          // NEW
           btnTheme: qs("#btnTheme"),
           themeText: qs("#themeText"),
+
+          // NEW: bias controls
+          baseHue: qs("#baseHue"),
+          satBias: qs("#satBias"),
+          satBiasText: qs("#satBiasText"),
+          lockBaseHue: qs("#lockBaseHue"),
+          btnResetBias: qs("#btnResetBias"),
         };
 
         const renderRoles = () => {
@@ -1951,6 +2091,16 @@
           els.lockBodyFont.setAttribute(
             "aria-pressed",
             state.locks.bodyFont ? "true" : "false",
+          );
+        };
+
+        const renderBias = () => {
+          els.baseHue.value = String(state.bias.baseHueHex || "#3B82F6");
+          els.satBias.value = String(state.bias.satBias || 0);
+          els.satBiasText.textContent = String(state.bias.satBias || 0);
+          els.lockBaseHue.setAttribute(
+            "aria-pressed",
+            state.bias.lockBaseHue ? "true" : "false",
           );
         };
 
@@ -2104,11 +2254,11 @@
 
           renderRoles();
           renderFonts();
+          renderBias();
           renderPreview();
           renderA11y();
           renderFavorites();
 
-          // NEW
           applyTheme(state.theme);
         };
 
@@ -2351,8 +2501,51 @@
             );
           });
 
-          // NEW: theme toggle
+          // theme toggle
           els.btnTheme.addEventListener("click", () => cycleTheme());
+
+          // NEW: bias events
+          els.baseHue.addEventListener("input", () => {
+            state.bias.baseHueHex = String(
+              els.baseHue.value || "#3B82F6",
+            ).toUpperCase();
+            persistBias();
+            regenUnlocked();
+          });
+
+          els.satBias.addEventListener("input", () => {
+            state.bias.satBias = Number(els.satBias.value) || 0;
+            els.satBiasText.textContent = String(state.bias.satBias);
+            persistBias();
+          });
+
+          els.satBias.addEventListener("change", () => {
+            regenUnlocked();
+          });
+
+          els.lockBaseHue.addEventListener("click", () => {
+            state.bias.lockBaseHue = !state.bias.lockBaseHue;
+            els.lockBaseHue.setAttribute(
+              "aria-pressed",
+              state.bias.lockBaseHue ? "true" : "false",
+            );
+            persistBias();
+            toast(
+              "Base hue lock",
+              state.bias.lockBaseHue ? "Enabled" : "Disabled",
+            );
+            regenUnlocked();
+          });
+
+          els.btnResetBias.addEventListener("click", () => {
+            state.bias.baseHueHex = "#3B82F6";
+            state.bias.satBias = 0;
+            state.bias.lockBaseHue = false;
+            persistBias();
+            renderAll();
+            regenUnlocked();
+            toast("Bias reset");
+          });
 
           // Keyboard: Cmd/Ctrl+Enter regenerates unlocked
           window.addEventListener("keydown", (e) => {
@@ -2371,7 +2564,7 @@
         const init = () => {
           loadPersisted();
 
-          // NEW: apply theme early for reduced flash
+          // apply theme early for reduced flash
           applyTheme(state.theme);
           bindSystemThemeListener();
 
